@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Web - Chat NestJS</title>
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #111b21;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: #111b21;
+            width: 100%;
+            max-width: 1400px;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            border-radius: 0;
+        }
+
+        .sidebar {
+            width: 400px;
+            background: #111b21;
+            color: #e9edef;
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid #2a3942;
+        }
+
+        .sidebar-header {
+            background: #2a3942;
+            padding: 20px;
+            border-bottom: 1px solid #2a3942;
+        }
+
+        .sidebar-header h3 {
+            color: #e9edef;
+            font-size: 19px;
+            font-weight: 400;
+            margin-bottom: 15px;
+        }
+
+        .room-selector {
+            margin-bottom: 0;
+        }
+
+        .room-selector select {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: #3b4a54;
+            color: #e9edef;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .room-selector select:focus {
+            outline: none;
+            background: #4a5c6a;
+        }
+
+        .users-section {
+            flex: 1;
+            overflow-y: auto;
+            background: #111b21;
+        }
+
+        .users-header {
+            padding: 15px 20px;
+            background: #2a3942;
+            color: #00a884;
+            font-size: 14px;
+            font-weight: 500;
+            border-bottom: 1px solid #2a3942;
+        }
+
+        .users-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .user-item {
+            padding: 12px 20px;
+            border-bottom: 1px solid #2a3942;
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .user-item:hover {
+            background: #2a3942;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #00a884;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+
+        .user-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00a884;
+            margin-left: auto;
+        }
+
+        .user-typing {
+            background: #f39c12;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0b141a;
+        }
+
+        .chat-header {
+            background: #2a3942;
+            color: #e9edef;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #2a3942;
+        }
+
+        .chat-header-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #00a884;
+            margin-right: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+        }
+
+        .chat-header-info h2 {
+            font-size: 16px;
+            font-weight: 400;
+            margin-bottom: 2px;
+        }
+
+        .chat-header-info small {
+            color: #8696a0;
+            font-size: 13px;
+        }
+
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="chat-bg" x="0" y="0" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="50" cy="50" r="2" fill="%23ffffff" fill-opacity="0.03"/></pattern></defs><rect width="100" height="100" fill="url(%23chat-bg)"/></svg>'), #0b141a;
+        }
+
+        .message {
+            margin-bottom: 12px;
+            display: flex;
+            align-items: flex-end;
+            max-width: 100%;
+        }
+
+        .message.own {
+            justify-content: flex-end;
+        }
+
+        .message.other {
+            justify-content: flex-start;
+        }
+
+        .message-bubble {
+            max-width: 65%;
+            padding: 6px 12px 8px 12px;
+            border-radius: 8px;
+            position: relative;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .message.own .message-bubble {
+            background: #005c4b;
+            color: #e9edef;
+        }
+
+        .message.other .message-bubble {
+            background: #202c33;
+            color: #e9edef;
+        }
+
+        .message-author {
+            font-weight: 500;
+            font-size: 12px;
+            margin-bottom: 4px;
+            opacity: 0.8;
+        }
+
+        .message.own .message-author {
+            display: none;
+        }
+
+        .message-content {
+            font-size: 14px;
+            line-height: 1.4;
+            margin-bottom: 4px;
+        }
+
+        .message-time {
+            font-size: 11px;
+            opacity: 0.6;
+            text-align: right;
+            margin-top: 4px;
+        }
+
+        .message.own .message-time {
+            color: #8696a0;
+        }
+
+        .message.other .message-time {
+            color: #8696a0;
+        }
+
+        .typing-indicator {
+            padding: 10px 20px;
+            font-style: italic;
+            opacity: 0.7;
+            color: #8696a0;
+            font-size: 13px;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: #2a3942;
+            border-top: 1px solid #2a3942;
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+        }
+
+        .input-wrapper {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            background: #3b4a54;
+            border-radius: 25px;
+            padding: 8px 16px;
+        }
+
+        .message-input {
+            flex: 1;
+            padding: 8px 0;
+            border: none;
+            background: transparent;
+            color: #e9edef;
+            font-size: 14px;
+            outline: none;
+            resize: none;
+            min-height: 20px;
+            max-height: 120px;
+        }
+
+        .message-input::placeholder {
+            color: #8696a0;
+        }
+
+        .send-button {
+            width: 45px;
+            height: 45px;
+            background: #00a884;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+            color: white;
+            font-size: 18px;
+        }
+
+        .send-button:hover {
+            background: #017f66;
+        }
+
+        .send-button:disabled {
+            background: #3b4a54;
+            cursor: not-allowed;
+        }
+
+        .login-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .login-form {
+            background: #2a3942;
+            padding: 40px;
+            border-radius: 15px;
+            text-align: center;
+            min-width: 320px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        .login-form h2 {
+            margin-bottom: 30px;
+            color: #e9edef;
+            font-weight: 400;
+        }
+
+        .login-form input {
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #3b4a54;
+            border-radius: 8px;
+            font-size: 14px;
+            background: #3b4a54;
+            color: #e9edef;
+        }
+
+        .login-form input::placeholder {
+            color: #8696a0;
+        }
+
+        .login-form input:focus {
+            outline: none;
+            border-color: #00a884;
+        }
+
+        .login-form button {
+            width: 100%;
+            padding: 15px;
+            background: #00a884;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: 500;
+        }
+
+        .login-form button:hover {
+            background: #017f66;
+        }
+
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+        }
+
+        .status-connected {
+            background: #00a884;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .system-message {
+            text-align: center;
+            color: #8696a0;
+            font-style: italic;
+            margin: 10px 0;
+            font-size: 13px;
+        }
+
+        /* Scrollbar personalizado */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2a3942;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #3b4a54;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4a5c6a;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                width: 100%;
+                height: 100vh;
+                border-radius: 0;
+            }
+
+            .sidebar {
+                width: 300px;
+            }
+
+            .message-bubble {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="connection-status status-disconnected" id="connectionStatus">
+        🔴 Desconectado
+    </div>
+
+    <div class="container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3>💬 Chat NestJS</h3>
+                <div class="room-selector">
+                    <select id="roomSelect">
+                        <option value="general">🏠 General</option>
+                        <option value="desarrollo">💻 Desarrollo</option>
+                        <option value="random">🎲 Random</option>
+                        <option value="tecnologia">⚡ Tecnología</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="users-section">
+                <div class="users-header">
+                    👥 Usuarios Online
+                </div>
+                <div class="users-list" id="usersList">
+                    <!-- Los usuarios se llenarán dinámicamente -->
+                </div>
+            </div>
+        </div>
+
+        <div class="chat-main">
+            <div class="chat-header">
+                <div class="chat-header-avatar" id="roomAvatar">G</div>
+                <div class="chat-header-info">
+                    <h2 id="currentRoom">General</h2>
+                    <!-- <small>Desarrollado con NestJS + Socket.IO + Redis</small> -->
+                </div>
+            </div>
+
+            <div class="messages-container" id="messagesContainer">
+                <!-- Los mensajes se llenarán dinámicamente -->
+            </div>
+
+            <div class="typing-indicator" id="typingIndicator" style="display: none;">
+                <!-- Indicador de usuario escribiendo -->
+            </div>
+
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <input 
+                        type="text" 
+                        id="messageInput" 
+                        class="message-input" 
+                        placeholder="Escribe un mensaje"
+                        disabled
+                    >
+                </div>
+                <button id="sendButton" class="send-button" disabled>
+                    ➤
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="login-modal" id="loginModal">
+        <div class="login-form">
+            <h2>💬 Únete al Chat</h2>
+            <input type="text" id="usernameInput" placeholder="Escribe tu nombre" maxlength="50">
+            <button id="joinButton">Entrar al Chat</button>
+        </div>
+    </div>
+
+    <script>
+        class ChatClient {
+            constructor() {
+                this.socket = null;
+                this.username = '';
+                this.currentRoom = 'general';
+                this.typingUsers = new Set();
+                this.typingTimer = null;
+                this.isTyping = false;
+                
+                this.initializeElements();
+                this.setupEventListeners();
+            }
+
+            initializeElements() {
+                this.elements = {
+                    loginModal: document.getElementById('loginModal'),
+                    usernameInput: document.getElementById('usernameInput'),
+                    joinButton: document.getElementById('joinButton'),
+                    roomSelect: document.getElementById('roomSelect'),
+                    currentRoom: document.getElementById('currentRoom'),
+                    roomAvatar: document.getElementById('roomAvatar'),
+                    usersList: document.getElementById('usersList'),
+                    messagesContainer: document.getElementById('messagesContainer'),
+                    messageInput: document.getElementById('messageInput'),
+                    sendButton: document.getElementById('sendButton'),
+                    typingIndicator: document.getElementById('typingIndicator'),
+                    connectionStatus: document.getElementById('connectionStatus')
+                };
+            }
+
+            setupEventListeners() {
+                // Login
+                this.elements.joinButton.addEventListener('click', () => this.joinChat());
+                this.elements.usernameInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter') this.joinChat();
+                });
+
+                // Mensajes
+                this.elements.sendButton.addEventListener('click', () => this.sendMessage());
+                this.elements.messageInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.sendMessage();
+                    }
+                });
+
+                // Typing indicator
+                this.elements.messageInput.addEventListener('input', () => this.handleTyping());
+
+                // Cambio de sala
+                this.elements.roomSelect.addEventListener('change', () => this.changeRoom());
+            }
+
+            joinChat() {
+                const username = this.elements.usernameInput.value.trim();
+                if (!username) {
+                    alert('Por favor ingresa un nombre de usuario');
+                    return;
+                }
+
+                this.username = username;
+                this.connectToServer();
+            }
+
+            connectToServer() {
+                this.socket = io('http://localhost:3000');
+
+                this.socket.on('connect', () => {
+                    console.log('Conectado al servidor');
+                    this.updateConnectionStatus(true);
+                    this.joinRoom();
+                    this.elements.loginModal.style.display = 'none';
+                    this.elements.messageInput.disabled = false;
+                    this.elements.sendButton.disabled = false;
+                });
+
+                this.socket.on('disconnect', () => {
+                    console.log('Desconectado del servidor');
+                    this.updateConnectionStatus(false);
+                    this.elements.messageInput.disabled = true;
+                    this.elements.sendButton.disabled = true;
+                });
+
+                this.socket.on('message:new', (message) => {
+                    this.addMessage(message);
+                });
+
+                this.socket.on('user:joined', (user) => {
+                    this.addSystemMessage(`${user.username} se unió a la sala`);
+                });
+
+                this.socket.on('user:left', (user) => {
+                    this.addSystemMessage(`${user.username} dejó la sala`);
+                });
+
+                this.socket.on('room:users', (users) => {
+                    this.updateUsersList(users);
+                });
+
+                this.socket.on('room:messages', (messages) => {
+                    this.loadMessages(messages);
+                });
+
+                this.socket.on('user:typing', (data) => {
+                    this.showTypingIndicator(data.username);
+                });
+
+                this.socket.on('user:stop-typing', (data) => {
+                    this.hideTypingIndicator(data.username);
+                });
+            }
+
+            joinRoom() {
+                this.socket.emit('user:join', {
+                    username: this.username,
+                    room: this.currentRoom
+                });
+            }
+
+            changeRoom() {
+                if (!this.socket) return;
+
+                // Salir de la sala actual
+                this.socket.emit('user:leave', {
+                    username: this.username,
+                    room: this.currentRoom
+                });
+
+                // Cambiar a la nueva sala
+                this.currentRoom = this.elements.roomSelect.value;
+                this.elements.currentRoom.textContent = this.currentRoom.charAt(0).toUpperCase() + this.currentRoom.slice(1);
+                
+                // Actualizar avatar de la sala
+                this.elements.roomAvatar.textContent = this.currentRoom.charAt(0).toUpperCase();
+                
+                // Limpiar mensajes
+                this.elements.messagesContainer.innerHTML = '';
+                
+                // Unirse a la nueva sala
+                this.joinRoom();
+            }
+
+            sendMessage() {
+                const content = this.elements.messageInput.value.trim();
+                if (!content || !this.socket) return;
+
+                this.socket.emit('message:send', {
+                    content,
+                    author: this.username,
+                    room: this.currentRoom
+                });
+
+                this.elements.messageInput.value = '';
+                this.stopTyping();
+            }
+
+            addMessage(message) {
+                const messageEl = document.createElement('div');
+                messageEl.className = `message ${message.author === this.username ? 'own' : 'other'}`;
+                
+                const bubbleEl = document.createElement('div');
+                bubbleEl.className = 'message-bubble';
+                bubbleEl.innerHTML = `
+                    <div class="message-author">${message.author}</div>
+                    <div class="message-content">${this.escapeHtml(message.content)}</div>
+                    <div class="message-time">${new Date(message.timestamp).toLocaleTimeString()}</div>
+                `;
+
+                messageEl.appendChild(bubbleEl);
+                this.elements.messagesContainer.appendChild(messageEl);
+                this.scrollToBottom();
+            }
+
+            addSystemMessage(content) {
+                const messageEl = document.createElement('div');
+                messageEl.className = 'system-message';
+                messageEl.textContent = content;
+
+                this.elements.messagesContainer.appendChild(messageEl);
+                this.scrollToBottom();
+            }
+
+            loadMessages(messages) {
+                messages.forEach(message => {
+                    this.addMessage(message);
+                });
+            }
+
+            updateUsersList(users) {
+                this.elements.usersList.innerHTML = '';
+                users.forEach(user => {
+                    const userEl = document.createElement('div');
+                    userEl.className = 'user-item';
+                    userEl.innerHTML = `
+                        <div class="user-avatar">${user.username.charAt(0).toUpperCase()}</div>
+                        <span>${user.username}</span>
+                        <div class="user-status ${this.typingUsers.has(user.username) ? 'user-typing' : ''}"></div>
+                    `;
+                    this.elements.usersList.appendChild(userEl);
+                });
+            }
+
+            handleTyping() {
+                if (!this.isTyping) {
+                    this.isTyping = true;
+                    this.socket.emit('user:typing', {
+                        username: this.username,
+                        room: this.currentRoom
+                    });
+                }
+
+                clearTimeout(this.typingTimer);
+                this.typingTimer = setTimeout(() => {
+                    this.stopTyping();
+                }, 1000);
+            }
+
+            stopTyping() {
+                if (this.isTyping) {
+                    this.isTyping = false;
+                    this.socket.emit('user:stop-typing', {
+                        username: this.username,
+                        room: this.currentRoom
+                    });
+                }
+            }
+
+            showTypingIndicator(username) {
+                this.typingUsers.add(username);
+                this.updateTypingIndicator();
+            }
+
+            hideTypingIndicator(username) {
+                this.typingUsers.delete(username);
+                this.updateTypingIndicator();
+            }
+
+            updateTypingIndicator() {
+                const typingArray = Array.from(this.typingUsers);
+                if (typingArray.length === 0) {
+                    this.elements.typingIndicator.style.display = 'none';
+                } else {
+                    let text = '';
+                    if (typingArray.length === 1) {
+                        text = `${typingArray[0]} está escribiendo...`;
+                    } else {
+                        text = `${typingArray.join(', ')} están escribiendo...`;
+                    }
+                    this.elements.typingIndicator.textContent = text;
+                    this.elements.typingIndicator.style.display = 'block';
+                }
+            }
+
+            updateConnectionStatus(connected) {
+                if (connected) {
+                    this.elements.connectionStatus.textContent = '🟢 Conectado';
+                    this.elements.connectionStatus.className = 'connection-status status-connected';
+                } else {
+                    this.elements.connectionStatus.textContent = '🔴 Desconectado';
+                    this.elements.connectionStatus.className = 'connection-status status-disconnected';
+                }
+            }
+
+            scrollToBottom() {
+                this.elements.messagesContainer.scrollTop = this.elements.messagesContainer.scrollHeight;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Inicializar el cliente cuando se carga la página
+        document.addEventListener('DOMContentLoaded', () => {
+            new ChatClient();
+        });
+    </script>
+</body>
+</html> 
